@@ -136,6 +136,7 @@ class oimFitterEmcee(oimFitter):
                 self.params["nwalkers"].value,
                 self.nfree,
                 self._logProbability,
+                args = (self.params["chi2fact"].value,),
                 moves=moves,
                 **kwargs,
             )
@@ -154,6 +155,7 @@ class oimFitterEmcee(oimFitter):
                 self.params["nwalkers"].value,
                 self.nfree,
                 self._logProbability,
+                args = (self.params["chi2fact"].value,),
                 moves=moves,
                 backend=backend,
                 **kwargs,
@@ -207,7 +209,7 @@ class oimFitterEmcee(oimFitter):
 
     # TODO: Maybe make it possible for end-user to input their own
     # parametrisation
-    def _logProbability(self, theta):
+    def _logProbability(self, theta, chi2fact):
         for iparam, parami in enumerate(self.freeParams.values()):
             parami.value = theta[iparam]
 
@@ -220,7 +222,7 @@ class oimFitterEmcee(oimFitter):
         self.simulator.compute(
             computeChi2=True, dataTypes=self.dataTypes, cprior=self.cprior
         )
-        return -0.5 * self.simulator.chi2 / self.params["chi2fact"].value
+        return -0.5 * self.simulator.chi2 / chi2fact #self.params["chi2fact"].value
 
     def getResults(
         self,

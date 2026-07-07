@@ -25,6 +25,8 @@ files = list(data_dir.glob("*.fits"))
 # %%
 data = oim.oimData(files)
 
+print(data.data)
+
 f1 = oim.oimWavelengthRangeFilter(targets="all", wlRange=[3.0e-6, 4e-6])
 
 filters = oim.oimDataFilter([f1])
