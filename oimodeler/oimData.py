@@ -4,6 +4,7 @@
 from enum import IntFlag
 from pathlib import Path
 from typing import Any, List, Tuple, Union
+import io
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -282,7 +283,7 @@ class oimData:
         filt: Union[oimDataFilter, None] = None,
     ) -> None:
         """Initialize the class with the data and the filter to use."""
-        self._data = []
+        self.__data = []
         self.dataInfo = []
         self.vect_u = None
         self.vect_v = None
@@ -323,6 +324,11 @@ class oimData:
         return txt
 
     @property
+    def _data(self) -> None:
+        """Re-load data from bytestrings and return the _data object expected"""
+        return [fits.open(io.BytesIO(d)) for d in self.__data]
+
+    @property
     def data(self) -> None:
         """Return the data."""
         if not self._useFilter or self._filter is None:
@@ -343,7 +349,11 @@ class oimData:
         prepare : bool, optional
             Whether to prepare the data or not. The default is True.
         """
-        self._data.extend(loadOifitsData(dataOrFilename))
+        loadingdata = loadOifitsData(dataOrFilename)
+        for ld in loadingdata:
+            byte_buffer = io.BytesIO()
+            ld.writeto(byte_buffer)
+            self.__data.extend([byte_buffer.getvalue()])
 
         self.prepared = False
         self._filteredDataReady = False
