@@ -295,7 +295,7 @@ class oimData:
 
         self._filter = filt
         self._useFilter = False
-        self._filteredData = None
+        #self._filteredData = None
         self._filteredDataReady = False
 
         if dataOrFilename:
@@ -397,15 +397,25 @@ class oimData:
         self._filteredDataReady = False
         self.useFilter = useFilter
 
+    @property
+    def _filteredData(self) -> None:
+        return [fits.open(io.BytesIO(d)) for d in self.__filteredData]
+
     def applyFilter(self) -> None:
         """Apply the used filter(s) to the data."""
-        self._filteredData = []
+        filteredData = []
 
         for data in self._data:
-            self._filteredData.append(hdulistDeepCopy(data))
+            filteredData.append(data)
 
         if self._filter is not None:
-            self._filter.applyFilter(self._filteredData)
+            self._filter.applyFilter(filteredData)
+
+        self.__filteredData = []
+        for fd in filteredData:
+            byte_buffer = io.BytesIO()
+            fd.writeto(byte_buffer)
+            self.__filteredData.extend([byte_buffer.getvalue()])
 
         self._filteredDataReady = True
         self.prepareData()
