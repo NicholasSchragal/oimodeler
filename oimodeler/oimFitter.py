@@ -17,6 +17,9 @@ from matplotlib import cm
 from matplotlib.axes import Axes
 from scipy.optimize import minimize
 from tqdm import tqdm
+from multiprocessing import Pool
+import inspect
+from copy import deepcopy
 
 from .oimParam import oimParam
 from .oimSimulator import oimSimulator
@@ -130,6 +133,9 @@ class oimFitterEmcee(oimFitter):
             ],
         )
 
+        #init_params = inspect.signature(emcee.EnsembleSampler.__init__).parameters
+        #sampler_kwargs = {k: v for k, v in kwargs.items() if k in init_params}
+
         samplerFile = kwargs.pop("samplerFile", None)
         if samplerFile is None:
             self.sampler = emcee.EnsembleSampler(
@@ -206,6 +212,10 @@ class oimFitterEmcee(oimFitter):
         self.sampler.run_mcmc(state, **kwargs)
         self.getResults()
         return kwargs
+
+    def _load_sampler(self, sampler):
+        self.sampler = sampler
+        self.getResults()
 
     # TODO: Maybe make it possible for end-user to input their own
     # parametrisation
@@ -357,9 +367,11 @@ class oimFitterEmcee(oimFitter):
         chi2max = chi2limfact * chi2min
         chi2bins = np.linspace(chi2max, chi2min, ncolors)
         if "cmap" in kwargs:
-            cmap = cm.get_cmap(kwargs.pop("cmap"), ncolors)
+            #cmap = cm.get_cmap(kwargs.pop("cmap"), ncolors)
+            cmap = plt.get_cmap(kwargs.pop("cmap"), ncolors)
         else:
-            cmap = cm.get_cmap(mpl.rcParams["image.cmap"], ncolors)
+            #cmap = cm.get_cmap(mpl.rcParams["image.cmap"], ncolors)
+            cmap = plt.get_cmap(mpl.rcParams["image.cmap"], ncolors)
 
         for i in range(self.nfree):
             for icol in range(ncolors):
@@ -982,3 +994,89 @@ def oimComputeChi2PlusOneUncertainties(
         return errs, fig, ax
 
     return errs
+
+INFIT = None
+def multi_worker(fit):
+    global INFIT
+    INFIT = deepcopy(fit)
+
+def runMultiEmcee(fit, nsteps, prepkwargs = {}, runkwargs = {}):
+
+    fit.prepare(**prepkwargs)
+
+    x0 = fit.initialParams
+
+    with Pool(
+        initializer = multi_worker,
+        initargs = (fit,),
+    ) as pool:
+
+        prepkwargs.pop("init", None)
+        moves = prepkwargs.pop(
+            "moves",
+            [
+                (emcee.moves.DEMove(), 0.8),
+                (emcee.moves.DESnookerMove(), 0.2),
+            ],
+        )
+
+        samplerFile = prepkwargs.pop("samplerFile", None)
+        if samplerFile is None:
+            sampler = emcee.EnsembleSampler(
+                fit.params["nwalkers"].value,
+                fit.nfree,
+                multiLogProbability,
+                #args = (fit,),
+                moves=moves,
+                pool = pool,
+                **prepkwargs,
+            )
+        else:
+            samplerFile = Path(samplerFile)
+            if samplerFile.exists():
+                warnings.warn(
+                    "Sampler file already exists."
+                    " Can lead to errors if settings of previous"
+                    " run differ from current.",
+                    UserWarning,
+                )
+
+            backend = emcee.backends.HDFBackend(samplerFile)
+            sampler = emcee.EnsembleSampler(
+                fit.params["nwalkers"].value,
+                fit.nfree,
+                multiLogProbability,
+                #args = (fit,),
+                moves=moves,
+                backend=backend,
+                pool = pool,
+                **prepkwargs,
+            )
+        
+        #print("Starting run")
+        sampler.run_mcmc(x0, nsteps, **runkwargs)
+        fit._load_sampler(sampler)
+        return sampler
+
+
+
+def multiLogProbability(theta):#, infit):#, chi2fact):
+
+    global INFIT
+    sim = INFIT
+    
+    for iparam, parami in enumerate(sim.freeParams.values()):
+        parami.value = theta[iparam]
+
+    for i, key in enumerate(sim.freeParams):
+        val = theta[i]
+        lower, upper = sim.limits[key]
+        if not lower < val < upper:
+            return -np.inf
+
+    sim.simulator.compute(
+        computeChi2=True, dataTypes=sim.dataTypes, cprior=sim.cprior
+    )
+    logprob = -0.5 * sim.simulator.chi2 / sim.params["chi2fact"].value
+    del sim
+    return logprob
