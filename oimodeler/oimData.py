@@ -283,7 +283,8 @@ class oimData:
         filt: Union[oimDataFilter, None] = None,
     ) -> None:
         """Initialize the class with the data and the filter to use."""
-        self.__data = []
+        #self.__data = []
+        self._data = []
         self.dataInfo = []
         self.vect_u = None
         self.vect_v = None
@@ -323,10 +324,10 @@ class oimData:
                     txt += f"\t\t{ddi}\n"
         return txt
 
-    @property
-    def _data(self) -> None:
-        """Re-load data from bytestrings and return the _data object expected"""
-        return [fits.open(io.BytesIO(d)) for d in self.__data]
+    #@property
+    #def _data(self) -> None:
+    #    """Re-load data from bytestrings and return the _data object expected"""
+    #    return [fits.open(io.BytesIO(d)) for d in self.__data]
 
     @property
     def data(self) -> None:
@@ -349,11 +350,12 @@ class oimData:
         prepare : bool, optional
             Whether to prepare the data or not. The default is True.
         """
-        loadingdata = loadOifitsData(dataOrFilename)
-        for ld in loadingdata:
-            byte_buffer = io.BytesIO()
-            ld.writeto(byte_buffer)
-            self.__data.extend([byte_buffer.getvalue()])
+        #loadingdata = loadOifitsData(dataOrFilename)
+        #for ld in loadingdata:
+        #    byte_buffer = io.BytesIO()
+        #    ld.writeto(byte_buffer)
+        #    self.__data.extend([byte_buffer.getvalue()])
+        self._data.extend(loadOifitsData(dataOrFilename))
 
         self.prepared = False
         self._filteredDataReady = False
@@ -397,25 +399,29 @@ class oimData:
         self._filteredDataReady = False
         self.useFilter = useFilter
 
-    @property
-    def _filteredData(self) -> None:
-        return [fits.open(io.BytesIO(d)) for d in self.__filteredData]
+    #@property
+    #def _filteredData(self) -> None:
+    #    return [fits.open(io.BytesIO(d)) for d in self.__filteredData]
 
     def applyFilter(self) -> None:
         """Apply the used filter(s) to the data."""
-        filteredData = []
+        #filteredData = []
+        self._filteredData = []
 
         for data in self._data:
-            filteredData.append(data)
+            #filteredData.append(data)
+            self._filteredData.append(hdulistDeepCopy(data))
 
         if self._filter is not None:
+            #self._filter.applyFilter(filteredData)
             self._filter.applyFilter(filteredData)
 
-        self.__filteredData = []
-        for fd in filteredData:
-            byte_buffer = io.BytesIO()
-            fd.writeto(byte_buffer)
-            self.__filteredData.extend([byte_buffer.getvalue()])
+
+        #self.__filteredData = []
+        #for fd in filteredData:
+        #    byte_buffer = io.BytesIO()
+        #    fd.writeto(byte_buffer)
+        #    self.__filteredData.extend([byte_buffer.getvalue()])
 
         self._filteredDataReady = True
         self.prepareData()
