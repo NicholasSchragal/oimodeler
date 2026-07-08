@@ -5,6 +5,7 @@ Created on Wed Oct 19 12:30:21 2022
 @author: Ame
 """
 import numpy as np
+import jax
 import jax.numpy as jnp
 from jax import jit
 from astropy import units as units
@@ -108,8 +109,12 @@ def fastRotator(dim0, insize, incld, rot, Tpole, lam, beta=0.25, a1=0, a2=0, a3=
         im = im/tot
         im0 = jnp.zeros([dim0, dim0,1])
 
-        im0[dim0//2-dim//2:dim0//2+dim//2, dim0//2-dim//2:dim0//2+dim//2,0] = im
-
+        #im0[dim0//2-dim//2:dim0//2+dim//2, dim0//2-dim//2:dim0//2+dim//2,0] = im
+        im0 = im0.at[
+            dim0//2 - dim//2 : dim0//2 + dim//2,
+            dim0//2 - dim//2 : dim0//2 + dim//2,
+            :
+        ].set(im)
         
         return im0
 
@@ -138,7 +143,7 @@ def fastRotator(dim0, insize, incld, rot, Tpole, lam, beta=0.25, a1=0, a2=0, a3=
 
         im0 = jnp.zeros([dim0, dim0, nlam])
         #im0[dim0//2-dim//2:dim0//2+dim//2, dim0//2-dim//2:dim0//2+dim//2, :] = im
-        im0.at[
+        im0 = im0.at[
             dim0//2 - dim//2 : dim0//2 + dim//2,
             dim0//2 - dim//2 : dim0//2 + dim//2,
             :

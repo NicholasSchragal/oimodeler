@@ -185,7 +185,7 @@ class oimFastRotator(oim.oimComponentImage):
 
 
 # NOTE: Create a model
-c = oimFastRotator(
+c = oim.oimCustomComponents.oimFastRotator(
     dpole=5, dim=128, incl=-70, rot=0.99, Tpole=20000, beta=0.25
 )
 m = oim.oimModel(c)

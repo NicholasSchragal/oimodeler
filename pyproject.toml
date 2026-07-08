@@ -31,6 +31,7 @@ dependencies = [
   "dynesty>=2.1.5",
   "emcee>=3.1.6",
   "h5py>=3.14.0",
+  "jax>=0.4.30",
   "matplotlib>=3.9.4",
   "numpy>=1.26.4",
   "pyfftw>=0.14.0",
