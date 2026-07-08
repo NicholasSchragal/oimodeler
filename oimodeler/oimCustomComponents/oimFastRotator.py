@@ -5,67 +5,75 @@ Created on Wed Oct 19 12:30:21 2022
 @author: Ame
 """
 import numpy as np
+import jax.numpy as jnp
+from jax import jit
 from astropy import units as units
 from astropy.constants import G, M_sun, R_sun, h, c, k_B
+from copy import deepcopy
 
 from ..oimComponent import oimComponentImage
 from ..oimParam import oimParam
 
 
-
-def fastRotator(dim0, size, incl, rot, Tpole, lam, beta=0.25, a1=0, a2=0, a3=0, a4=0, ldd=None):
+@jit(static_argnames = ["dim0", "insize"])
+def fastRotator(dim0, insize, incld, rot, Tpole, lam, beta=0.25, a1=0, a2=0, a3=0, a4=0, ldd=None):
     
     """
     Equations are taken from Domiciano+ 2018
     https://www.aanda.org/articles/aa/pdf/2018/11/aa33450-18.pdf
     """
 
-    nlam = np.size(lam)
-    incl = np.deg2rad(incl)
+    nlam = jnp.size(lam)
+    incl = jnp.deg2rad(incld)
 
-    x0 = np.linspace(-size, size, num=dim0)
-    idx = np.where(np.abs(x0) <= 1.5)
-    x = np.take(x0, idx)
-    dim = np.size(x)
-    unit = np.ones(dim)
-    x = np.outer(x, unit)
-    x = np.einsum('ij, k->ijk', x, unit)
+    #x0 = jnp.linspace(-size, size, num=dim0)
+    #idx = jnp.where(jnp.abs(x0) <= 1.5)
+    #x = jnp.take(x0, idx)
+    if insize > 1.5:
+        size = 1.5
+    else:
+        size = insize
+    x = jnp.linspace(-size, size, num=dim0)
+    dim = jnp.size(x)
+    unit = jnp.ones(dim)
+    x = jnp.outer(x, unit)
+    x = jnp.einsum('ij, k->ijk', x, unit)
 
-    y = np.swapaxes(x, 0, 1)
-    z = np.swapaxes(x, 0, 2)
+    y = jnp.swapaxes(x, 0, 1)
+    z = jnp.swapaxes(x, 0, 2)
 
-    yp = y*np.cos(incl)+z*np.sin(incl)
-    zp = y*np.sin(incl)-z*np.cos(incl)
+    yp = y*jnp.cos(incl)+z*jnp.sin(incl)
+    zp = y*jnp.sin(incl)-z*jnp.cos(incl)
 
-    r = np.sqrt(x**2+yp**2+zp**2)
+    r = jnp.sqrt(x**2+yp**2+zp**2)
 
-    theta = np.arccos(zp/r)
+    theta = jnp.arccos(zp/r)
 
-    #rot = np.sqrt(3*eps)
+    #rot = jnp.sqrt(3*eps)
     eps = rot**2/3 # flatening parameter
-    ome = 1.5*(1-eps)*np.sqrt(3*eps) # angular rate
+    ome = 1.5*(1-eps)*jnp.sqrt(3*eps) # angular rate
 
-    Rtheta = (1-eps)*np.sin(1/3*np.arcsin(ome*np.sin(theta)))/(1/3*ome*np.sin(theta))
+    Rtheta = (1-eps)*jnp.sin(1/3*jnp.arcsin(ome*jnp.sin(theta)))/(1/3*ome*jnp.sin(theta))
     Rtheta = Rtheta/Rtheta.min()
     Req =  Rtheta.max()
     
     dr = (Rtheta-r) >= 0
     
     
-    Fc = rot**2*1/Req**2*Rtheta*np.sin(theta)
+    Fc = rot**2*1/Req**2*Rtheta*jnp.sin(theta)
     
     G = 3/(2*Rtheta**2)
     
-    G_z = G*np.cos(theta)
-    G_rho = G*np.sin(theta)
+    G_z = G*jnp.cos(theta)
+    G_rho = G*jnp.sin(theta)
     
     #beta = 0.25-eps/3
     
-    geff=np.sqrt(G_z**2+(Fc-G_rho)**2)
+    geff=jnp.sqrt(G_z**2+(Fc-G_rho)**2)
     Teff = Tpole*geff**beta
 
     
-    mu=np.rot90(np.sum(dr,axis=2))
+    mu=jnp.rot90(jnp.sum(dr,axis=2))
     mu=mu/mu.max()
     
     
@@ -84,21 +92,21 @@ def fastRotator(dim0, size, incl, rot, Tpole, lam, beta=0.25, a1=0, a2=0, a3=0, 
         ldd_im = 1
     
     if nlam == 1:
-        flx = 1./(np.exp(K1/(lam*Teff))-1)*2*h*c**2/lam**5
+        flx = 1./(jnp.exp(K1/(lam*Teff))-1)*2*h*c**2/lam**5
 
-        im = np.zeros([dim, dim])
+        im = jnp.zeros([dim, dim])
 
         for iz in range(dim):
             im = im*(im != 0)+(im == 0) * \
                 dr[:, :, iz]*flx[:, :, iz] 
 
-        im = np.rot90(im)
+        im = jnp.rot90(im)
         im = im * ldd_im
 
 
-        tot = np.sum(im)
+        tot = jnp.sum(im)
         im = im/tot
-        im0 = np.zeros([dim0, dim0,1])
+        im0 = jnp.zeros([dim0, dim0,1])
 
         im0[dim0//2-dim//2:dim0//2+dim//2, dim0//2-dim//2:dim0//2+dim//2,0] = im
 
@@ -106,32 +114,39 @@ def fastRotator(dim0, size, incl, rot, Tpole, lam, beta=0.25, a1=0, a2=0, a3=0, 
         return im0
 
     else:
-        unit = np.zeros(nlam)+1
-        dr = np.einsum('ijk, l->ijkl', dr, unit)
-        Teff2=Teff[:,:,:,np.newaxis]
-        lam2 = lam [np.newaxis,np.newaxis,np.newaxis,:]
-        flx = 1./(np.exp(K1/(lam2*Teff2))-1)*2*h*c**2/lam2**5
-        #flx = 1./(np.exp(K1/np.einsum('ijk, l->ijkl', Teff, lam))-1)
+        unit = jnp.zeros(nlam)+1
+        dr = jnp.einsum('ijk, l->ijkl', dr, unit)
+        Teff2=Teff[:,:,:,jnp.newaxis]
+        lam2 = lam [jnp.newaxis,jnp.newaxis,jnp.newaxis,:]
+        flx = 1./(jnp.exp(K1/(lam2*Teff2))-1)*2*h*c**2/lam2**5
+        #flx = 1./(jnp.exp(K1/jnp.einsum('ijk, l->ijkl', Teff, lam))-1)
 
-        im = np.zeros([dim, dim, nlam])
+        im = jnp.zeros([dim, dim, nlam])
 
         for iz in range(dim):
             im = im*(im != 0)+dr[:, :, iz, :]*flx[:, :, iz, :]*(im == 0)
 
-        im = np.rot90(im)
+        im = jnp.rot90(im)
         if ldd :
-            im = im * ldd_im[:,:,np.newaxis]
+            im = im * ldd_im[:,:,jnp.newaxis]
         
-        tot = np.sum(im, axis=(0, 1))
+        tot = jnp.sum(im, axis=(0, 1))
 
         for ilam in range(nlam):
-            im[:, :, ilam] = im[:, :, ilam]/tot[ilam]
+            #im[:, :, ilam] = im[:, :, ilam]/tot[ilam]
+            im = im.at[:, :, ilam].divide(tot[ilam])
 
-        im0 = np.zeros([dim0, dim0, nlam])
-        im0[dim0//2-dim//2:dim0//2+dim//2, dim0//2-dim//2:dim0//2+dim//2, :] = im
+        im0 = jnp.zeros([dim0, dim0, nlam])
+        #im0[dim0//2-dim//2:dim0//2+dim//2, dim0//2-dim//2:dim0//2+dim//2, :] = im
+        im0.at[
+            dim0//2 - dim//2 : dim0//2 + dim//2,
+            dim0//2 - dim//2 : dim0//2 + dim//2,
+            :
+        ].set(im)
         return im0
 
-def fastRotator_2(dim0, R_eq, incl, veq, Mstar, Tp, lam, beta=np.nan, distance=10, a1=0, a2=0, a3=0, a4=0, ldd=None):
+#@jit
+def fastRotator_2(dim0, R_eq, incld, veq, Mstar, Tp, lam, beta=np.nan, distance=10, a1=0, a2=0, a3=0, a4=0, ldd=None):
     
     size = R_eq
     R_eq = R_eq * R_sun  
@@ -139,7 +154,7 @@ def fastRotator_2(dim0, R_eq, incl, veq, Mstar, Tp, lam, beta=np.nan, distance=1
     veq= veq * units.km/units.s
     
     nlam = np.size(lam)
-    incl = np.deg2rad(incl)
+    incl = np.deg2rad(incld)
 
     x0 = np.linspace(-size, size, num=dim0)
     idx = np.where(np.abs(x0) <= size)
@@ -283,7 +298,21 @@ class oimFastRotator(oimComponentImage):
         dpole = self.params["dpole"].value
         beta = self.params["beta"].value
 
-        im = fastRotator(dim, 1.5, incl, rot, Tpole, self._wl, beta=beta)
+        args = [
+            dim,
+            1.5,
+            incl,
+            rot,
+            Tpole,
+            self._wl,
+        ]
+        kwargs = {
+            "beta": beta
+        }
+        jargs = [jnp.asarray(a) if isinstance(a, np.ndarray) else a for a in args]
+        jkwargs = {k:(jnp.asarray(v) if isinstance(v, np.ndarray) else v) for k, v in kwargs.items()}
+        #im = fastRotator(dim, 1.5, incl, rot, Tpole, self._wl, beta=beta)
+        im = np.array(fastRotator(*jargs, **jkwargs))
 
         # make a nt,nwl,dim,dim hcube (even if t and/or wl are not relevent)
         im = np.tile(np.moveaxis(im, -1, 0)[None, :, :, :], (1, 1, 1, 1))
